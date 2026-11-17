@@ -30,6 +30,11 @@ async function refresh(){
     $('resultSection').hidden=!v;
     if(v&&!connected){$('stream').src='/api/stream?'+Date.now();connected=true}
     if(!v)connected=false;
+    const note=$('processingStatus');
+    if(v && s.pending){note.hidden=false;note.textContent='Ожидаем готовности модели…'}
+    else if(v && s.running && s.frame===0){note.hidden=false;note.textContent='Идёт поиск нор… На компьютере без видеокарты это может занять некоторое время.'}
+    else if(v && !s.running && s.status==='Обработка завершена.' && s.maximum===0){note.hidden=false;note.textContent='Обработка завершена: норы не найдены.'}
+    else {note.hidden=true;note.textContent=''}
     if(s.status.startsWith('Ошибка обработки:')) error(new Error(s.status));
   }catch(e){$('modelBox').hidden=false;$('modelStatus').textContent='Нет связи с программой. Проверьте окно запуска.'}
 }
