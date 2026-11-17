@@ -128,8 +128,8 @@ def reset():
 def upload(file: UploadFile = File(...)):
     global video, latest
     ext = Path(file.filename or '').suffix.lower()
-    if ext not in ('.mp4', '.avi', '.mov', '.jpg', '.jpeg', '.png'):
-        raise HTTPException(400, 'Выберите фото JPG или PNG либо видео MP4, AVI или MOV.')
+    if ext not in ('.mp4', '.avi', '.mov', '.jpg', '.jpeg', '.png', '.webp'):
+        raise HTTPException(400, 'Выберите фото JPG, PNG или WebP либо видео MP4, AVI или MOV.')
     with operation:
         clean()
         path = WORK / ('input' + ext)
@@ -138,7 +138,7 @@ def upload(file: UploadFile = File(...)):
                 shutil.copyfileobj(file.file, out, length=1024*1024)
             if not path.stat().st_size:
                 raise ValueError('Файл пуст.')
-            if ext in ('.jpg', '.jpeg', '.png'):
+            if ext in ('.jpg', '.jpeg', '.png', '.webp'):
                 try:
                     with Image.open(path) as image:
                         image = ImageOps.exif_transpose(image).convert('RGB')
