@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageOps
 from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from detector import Detector, draw
@@ -290,17 +290,27 @@ def stop_processing():
             state['status'] = 'Обработка остановлена.'
     return {'ok': True}
 
+@app.get('/api/frame')
+def current_frame():
+    with lock:
+        frame = latest
+    if frame is None:
+        raise HTTPException(404, 'Кадр пока недоступен.')
+    return Response(frame, media_type='image/jpeg', headers={'Cache-Control': 'no-store'})
+
 @app.get('/api/stream')
 def stream():
     def generate():
-        previous = None
         while True:
             with lock:
                 frame = latest
-            if frame is not None and frame is not previous:
-                previous = frame
-                yield b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + frame + b'\r\n'
-            time.sleep(.04)
+            if frame is not None:
+                # Repeat the current frame so the final multipart boundary is sent
+                # even when inference is slow or the video has finished.
+                header = (b'--frame\r\nContent-Type: image/jpeg\r\nContent-Length: '
+                          + str(len(frame)).encode('ascii') + b'\r\n\r\n')
+                yield header + frame + b'\r\n'
+            time.sleep(.15)
     return StreamingResponse(generate(), media_type='multipart/x-mixed-replace; boundary=frame', headers={'Cache-Control':'no-store'})
 
 @app.get('/api/result')

@@ -1,5 +1,5 @@
 const $=id=>document.getElementById(id);
-let connected=false;
+let connected=false, photoComplete=false;
 async function api(url,opts={method:'POST'}){
   const r=await fetch(url,opts);
   if(!r.ok){let msg='Не удалось выполнить действие.';try{msg=(await r.json()).detail||msg}catch{}throw Error(msg)}
@@ -12,7 +12,7 @@ $('file').onchange=async e=>{
   try{
     const data=new FormData();data.append('file',file);
     await api('/api/upload',{method:'POST',body:data});
-    $('stream').src='/api/stream?'+Date.now();connected=true;
+    connected=false;photoComplete=false;
   }catch(err){error(err)}finally{$('uploadLabel').classList.remove('busy');$('file').value='';refresh()}
 };
 $('modelDownload').onclick=async()=>{try{await api('/api/model/download')}catch(e){error(e)}refresh()};
@@ -28,8 +28,13 @@ async function refresh(){
     $('modelCheck').disabled=m.downloading||s.running;
     $('downloadProgress').textContent=m.downloading&&m.bytes?`${(m.bytes/1048576).toFixed(1)} из ${(d.model_size/1048576).toFixed(1)} МБ · ${(100*m.bytes/d.model_size).toFixed(1)}%`:'';
     $('resultSection').hidden=!v;
-    if(v&&!connected){$('stream').src='/api/stream?'+Date.now();connected=true}
-    if(!v)connected=false;
+    if(v && v.kind==='photo'){
+      const complete=!s.running && s.frame===1;
+      if(!connected || (complete && !photoComplete)){
+        $('stream').src='/api/frame?'+Date.now();connected=true;photoComplete=complete;
+      }
+    }else if(v&&!connected){$('stream').src='/api/stream?'+Date.now();connected=true}
+    if(!v){connected=false;photoComplete=false}
     const note=$('processingStatus');
     if(v && s.pending){note.hidden=false;note.textContent='Ожидаем готовности модели…'}
     else if(v && s.running && s.frame===0){note.hidden=false;note.textContent='Идёт поиск нор… На компьютере без видеокарты это может занять некоторое время.'}
