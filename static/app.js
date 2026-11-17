@@ -1,9 +1,36 @@
-const $=id=>document.getElementById(id); let busy=false, connected=false;
-async function api(url,opts={method:'POST'}){const r=await fetch(url,opts);if(!r.ok){let msg='Не удалось выполнить действие.';try{msg=(await r.json()).detail||msg}catch{}throw Error(msg)}return r.json()}
+const $=id=>document.getElementById(id);
+let connected=false;
+async function api(url,opts={method:'POST'}){
+  const r=await fetch(url,opts);
+  if(!r.ok){let msg='Не удалось выполнить действие.';try{msg=(await r.json()).detail||msg}catch{}throw Error(msg)}
+  return r.json();
+}
 function error(e){$('error').hidden=false;$('error').textContent=e.message||String(e)}
-function time(t){if(t==null||!Number.isFinite(t))return '—';t=Math.floor(t);return String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0')}
-$('file').onchange=async e=>{const file=e.target.files[0];if(!file)return;busy=true;$('uploadLabel').classList.add('busy');$('error').hidden=true;try{const data=new FormData();data.append('file',file);await api('/api/upload',{method:'POST',body:data});$('stream').src='/api/stream?'+Date.now();connected=true}catch(err){error(err)}finally{busy=false;$('uploadLabel').classList.remove('busy');$('file').value='';refresh()}};
-$('stop').onclick=async()=>{try{await api('/api/stop')}catch(e){error(e)}refresh()};
-$('modelDownload').onclick=async()=>{try{await api('/api/model/download')}catch(e){error(e)}refresh()};$('modelCheck').onclick=async()=>{try{await api('/api/model/check')}catch(e){error(e)}refresh()};
-async function refresh(){try{let d=await (await fetch('/api/status',{cache:'no-store'})).json(),m=d.model,s=d.state,v=d.video;$('modelBox').hidden=m.ready;$('modelStatus').textContent=m.status;$('modelDownload').disabled=m.downloading||s.running;$('modelCheck').disabled=m.downloading||s.running;$('downloadProgress').textContent=m.downloading&&m.bytes?`${(m.bytes/1048576).toFixed(1)} из ${(d.model_size/1048576).toFixed(1)} МБ · ${(100*m.bytes/d.model_size).toFixed(1)}%`:'';$('resultSection').hidden=!v;if(v){if(!connected){$('stream').src='/api/stream?'+Date.now();connected=true}$('filename').textContent=v.name;$('status').textContent=s.status;$('count').textContent=s.count;const isVideo=v.kind==='video';$('timeBox').hidden=!isVideo;$('fpsBox').hidden=!isVideo;$('progressBox').hidden=!isVideo;if(isVideo){$('time').textContent=time(s.frame/v.fps)+' / '+time(v.duration);$('fps').textContent=s.fps?s.fps.toFixed(1)+' кадр/с':'—';let pct=s.total?Math.min(100,s.frame/s.total*100):null;$('percent').textContent=pct===null?'—':pct.toFixed(1)+'%';$('bar').style.width=(pct||0)+'%';$('frames').textContent='Кадр '+s.frame+(s.total?' из '+s.total:'')}$('stop').hidden=!s.running&&!s.pending;$('result').hidden=!s.download}else connected=false}catch(e){$('modelBox').hidden=false;$('modelStatus').textContent='Нет связи с программой. Проверьте окно запуска.'}}
+$('file').onchange=async e=>{
+  const file=e.target.files[0];if(!file)return;
+  $('uploadLabel').classList.add('busy');$('error').hidden=true;
+  try{
+    const data=new FormData();data.append('file',file);
+    await api('/api/upload',{method:'POST',body:data});
+    $('stream').src='/api/stream?'+Date.now();connected=true;
+  }catch(err){error(err)}finally{$('uploadLabel').classList.remove('busy');$('file').value='';refresh()}
+};
+$('modelDownload').onclick=async()=>{try{await api('/api/model/download')}catch(e){error(e)}refresh()};
+$('modelCheck').onclick=async()=>{try{await api('/api/model/check')}catch(e){error(e)}refresh()};
+async function refresh(){
+  try{
+    const response=await fetch('/api/status',{cache:'no-store'});
+    if(!response.ok)throw Error('Нет связи с программой.');
+    const d=await response.json(),m=d.model,s=d.state,v=d.video;
+    $('modelBox').hidden=m.ready || (!m.downloading && !m.status.startsWith('Модель недоступна:') && !m.status.startsWith('Ошибка загрузки модели:'));
+    $('modelStatus').textContent=m.status;
+    $('modelDownload').disabled=m.downloading||s.running;
+    $('modelCheck').disabled=m.downloading||s.running;
+    $('downloadProgress').textContent=m.downloading&&m.bytes?`${(m.bytes/1048576).toFixed(1)} из ${(d.model_size/1048576).toFixed(1)} МБ · ${(100*m.bytes/d.model_size).toFixed(1)}%`:'';
+    $('resultSection').hidden=!v;
+    if(v&&!connected){$('stream').src='/api/stream?'+Date.now();connected=true}
+    if(!v)connected=false;
+    if(s.status.startsWith('Ошибка обработки:')) error(new Error(s.status));
+  }catch(e){$('modelBox').hidden=false;$('modelStatus').textContent='Нет связи с программой. Проверьте окно запуска.'}
+}
 setInterval(refresh,700);refresh();
